@@ -21,6 +21,7 @@
         <button id="btn-add-record" class="btn btn-primary">＋ 录入交接记录</button>
         <button id="btn-batch" class="btn">🧪 批量交接预演</button>
         <button id="btn-inventory" class="btn btn-accent">🔍 现场盘点</button>
+        <button id="btn-handover" class="btn">📋 人员交接责任单</button>
         <button id="btn-reverify" class="btn" title="重新读取记录并按时间重放">↻ 重新核验</button>
       </div>
     </div>
@@ -53,6 +54,53 @@
             <tr>
               <th class="col-rowno">#</th><th>道具名称</th><th>实物持有人</th>
               <th>账面持有人</th><th>结论</th><th>说明</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 人员交接责任单结果（查询后即时展示，不保存、不改写交接记录） -->
+    <section id="handover-panel" class="panel panel-handover hidden">
+      <div class="panel-head inventory-head">
+        <h2>📋 人员交接责任单 · <span id="ho-person">-</span> · 第 <span id="ho-from">-</span> 分钟（含）至第 <span id="ho-to">-</span> 分钟（含）</h2>
+        <button type="button" class="btn btn-sm" id="btn-ho-close" title="关闭责任单">✕ 关闭</button>
+      </div>
+      <div class="ho-summary" id="ho-summary"></div>
+      <div class="ho-holdings">
+        <div class="ho-hold-box ho-before">
+          <div class="ho-hold-head">窗口起点交接前持有 <span id="ho-before-count" class="ho-hold-count">0</span></div>
+          <div id="ho-before-list" class="ho-hold-list"></div>
+        </div>
+        <div class="ho-hold-box ho-after">
+          <div class="ho-hold-head">窗口终点交接后持有 <span id="ho-after-count" class="ho-hold-count">0</span></div>
+          <div id="ho-after-list" class="ho-hold-list"></div>
+        </div>
+      </div>
+      <div class="ho-section-head">
+        <h3>窗口内收支明细（按实际接续顺序）</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="table" id="ho-events-table">
+          <thead>
+            <tr>
+              <th class="col-rowno">次序</th><th>分钟</th><th>道具</th><th>事项</th>
+              <th>对方</th><th>对应记录</th><th>备注</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="ho-section-head">
+        <h3>无法判定（窗口前 / 窗口内链冲突，不计入确定持有与收支）</h3>
+      </div>
+      <div class="table-wrap">
+        <table class="table" id="ho-unknown-table">
+          <thead>
+            <tr>
+              <th>道具</th><th>冲突阶段</th><th>冲突分钟</th><th>冲突类型</th>
+              <th>定位记录</th><th>说明</th>
             </tr>
           </thead>
           <tbody></tbody>
@@ -206,6 +254,37 @@
         <button type="submit" class="btn btn-primary" id="inv-submit">提交盘点</button>
       </div>
       <datalist id="prop-name-list"></datalist>
+    </form>
+  </dialog>
+
+  <!-- 人员交接责任单查询弹窗 -->
+  <dialog id="handover-dialog" class="dialog">
+    <form method="dialog" id="handover-form">
+      <h3>人员交接责任单</h3>
+      <p class="dialog-tip">
+        输入人员与起止分钟（<strong>均包含</strong>在收支明细中）。服务端对每件道具只重放截止分钟及以前的交接，
+        沿用同分钟唯一链规则，按<strong>实际接续顺序</strong>列出该人在窗口内逐次接收、交出的道具与对应记录，
+        并汇总窗口起点交接前、终点交接后的持有道具。窗口前或窗口内发生链冲突的道具单列为<strong>无法判定</strong>
+        并标明冲突分钟，不计入确定持有与收支；窗口后的冲突不影响本次结果。查询<strong>只读</strong>，不改写任何交接记录。
+      </p>
+      <label class="field">
+        <span>人员 <em>*</em></span>
+        <input type="text" id="ho-person-input" maxlength="30" required list="people-list" placeholder="如 张三" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>起始分钟（含） <em>*</em></span>
+          <input type="number" id="ho-from-input" min="0" step="1" required placeholder="如 0" />
+        </label>
+        <label class="field">
+          <span>截止分钟（含） <em>*</em></span>
+          <input type="number" id="ho-to-input" min="0" step="1" required placeholder="如 12" />
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>取消</button>
+        <button type="submit" class="btn btn-primary" id="ho-submit">查询责任单</button>
+      </div>
     </form>
   </dialog>
 

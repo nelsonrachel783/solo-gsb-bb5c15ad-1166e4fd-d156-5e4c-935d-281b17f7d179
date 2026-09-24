@@ -7,6 +7,7 @@ const store = require('./src/store');
 const { verifyAll } = require('./src/verify');
 const { checkInventory } = require('./src/inventory');
 const { previewBatch, hashRows } = require('./src/batch');
+const { personHandovers } = require('./src/handover');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -87,6 +88,35 @@ app.post('/api/inventory/check', asyncRoute((req, res) => {
   // 纯读取 + 即时重放，不写入任何数据
   res.json(checkInventory(store.getData(), minute, rows));
 }));
+
+/* ---------------- 人员交接责任单（只读，即时结果，不改写交接记录） ---------------- */
+
+app.get('/api/handovers/person', (req, res) => {
+  const q = req.query || {};
+
+  let person;
+  try {
+    person = nonEmpty(q.person, '人员');
+  } catch (err) {
+    return badRequest(res, err.message);
+  }
+  if (person.length > 30) return badRequest(res, '人员姓名最长 30 个字符');
+
+  let fromMinute;
+  let toMinute;
+  try {
+    fromMinute = parseMinute(q.fromMinute, '起始分钟');
+    toMinute = parseMinute(q.toMinute, '截止分钟');
+  } catch (err) {
+    return badRequest(res, err.message);
+  }
+  if (fromMinute > toMinute) {
+    return badRequest(res, '起始分钟不能大于截止分钟（起止分钟均包含在收支明细中）');
+  }
+
+  // 纯读取 + 即时重放，不写入任何数据
+  res.json(personHandovers(store.getData(), person, fromMinute, toMinute));
+});
 
 /* ---------------- 道具 CRUD ---------------- */
 

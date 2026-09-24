@@ -57,6 +57,25 @@ const els = {
   btnBatchPreview: $('#btn-batch-preview'),
   btnBatchCommit: $('#btn-batch-commit'),
   batchResult: $('#batch-result'),
+  // 人员交接责任单
+  btnHandover: $('#btn-handover'),
+  hoDialog: $('#handover-dialog'),
+  hoForm: $('#handover-form'),
+  hoPersonInput: $('#ho-person-input'),
+  hoFromInput: $('#ho-from-input'),
+  hoToInput: $('#ho-to-input'),
+  hoPanel: $('#handover-panel'),
+  hoPersonLabel: $('#ho-person'),
+  hoFromLabel: $('#ho-from'),
+  hoToLabel: $('#ho-to'),
+  hoSummary: $('#ho-summary'),
+  hoBeforeList: $('#ho-before-list'),
+  hoAfterList: $('#ho-after-list'),
+  hoBeforeCount: $('#ho-before-count'),
+  hoAfterCount: $('#ho-after-count'),
+  hoEventsBody: document.querySelector('#ho-events-table tbody'),
+  hoUnknownBody: document.querySelector('#ho-unknown-table tbody'),
+  btnHoClose: $('#btn-ho-close'),
 };
 
 const STATUS_TEXT = {
@@ -396,6 +415,14 @@ function bindEvents() {
   });
   els.btnInvClose.addEventListener('click', () => els.invPanel.classList.add('hidden'));
 
+  // 人员交接责任单
+  els.btnHandover.addEventListener('click', openHandoverDialog);
+  els.hoForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitHandover();
+  });
+  els.btnHoClose.addEventListener('click', () => els.hoPanel.classList.add('hidden'));
+
   // 批量交接预演
   els.btnBatch.addEventListener('click', openBatchDialog);
   els.btnBatchAddRow.addEventListener('click', () => {
@@ -491,7 +518,7 @@ function bindEvents() {
       return;
     }
     const conflictLink = t.closest?.('[data-record-id]');
-    if (conflictLink && t.closest('.conflict-box')) {
+    if (conflictLink && t.closest('.conflict-box, .handover-links')) {
       locateRecord(conflictLink.dataset.recordId);
     }
   });
@@ -796,6 +823,133 @@ async function submitInventory() {
     els.invDialog.close();
     renderInventoryResult(result);
     toast('盘点完成（结果仅本次有效，未改动交接记录）');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+/* ==================== 人员交接责任单 ==================== */
+
+const HO_EVENT_TEXT = {
+  RECEIVE: { cls: 'ho-receive', text: '↓ 接收', arrow: '←' },
+  GIVE: { cls: 'ho-give', text: '↑ 交出', arrow: '→' },
+};
+const HO_PHASE_TEXT = { BEFORE: '窗口前', IN_WINDOW: '窗口内' };
+
+function openHandoverDialog() {
+  els.hoPersonInput.value = '';
+  els.hoFromInput.value = 0;
+  els.hoToInput.value = state.verification.endMinute || 0;
+  els.hoDialog.showModal();
+  els.hoPersonInput.focus();
+}
+
+function renderHoldingList(el, items, emptyText) {
+  if (items.length === 0) {
+    el.innerHTML = `<div class="ho-hold-empty">${emptyText}</div>`;
+    return;
+  }
+  el.innerHTML = items.map((h) =>
+    `<span class="ho-tag">${esc(h.propName)}<em class="ho-since" title="该人最后一次接收该道具的分钟">自第${h.sinceMinute}分</em></span>`
+  ).join('');
+}
+
+function renderHandoverResult(result) {
+  els.hoPersonLabel.textContent = result.person;
+  els.hoFromLabel.textContent = result.fromMinute;
+  els.hoToLabel.textContent = result.toMinute;
+
+  const s = result.summary;
+  const chips = [
+    [`接收 ${s.receiveCount} 次`, 'chip-ok'],
+    [`交出 ${s.giveCount} 次`, 'chip-warn'],
+    [`起点前持有 ${s.heldBeforeCount} 件`, 'chip-muted'],
+    [`终点后持有 ${s.heldAfterCount} 件`, 'chip-muted'],
+    [`涉及道具 ${s.involvedProps} 件`, ''],
+    [`无法判定 ${s.undeterminedCount} 件`, s.undeterminedCount > 0 ? 'chip-bad' : 'chip-ok'],
+  ];
+  els.hoSummary.innerHTML = chips
+    .map(([text, cls]) => `<span class="inv-chip ${cls}">${text}</span>`)
+    .join('');
+
+  els.hoBeforeCount.textContent = s.heldBeforeCount;
+  els.hoAfterCount.textContent = s.heldAfterCount;
+  renderHoldingList(els.hoBeforeList, result.heldBefore, '窗口起点交接前不持有任何道具');
+  renderHoldingList(els.hoAfterList, result.heldAfter, '窗口终点交接后不持有任何道具');
+
+  if (result.events.length === 0) {
+    els.hoEventsBody.innerHTML =
+      `<tr><td colspan="7" class="empty">该时间窗内没有「${esc(result.person)}」接收或交出道具的交接记录</td></tr>`;
+  } else {
+    els.hoEventsBody.innerHTML = result.events.map((e) => {
+      const st = HO_EVENT_TEXT[e.type];
+      const detail = e.type === 'RECEIVE'
+        ? `<span class="ho-arrow">${st.arrow}</span> ${esc(e.counterparty)} 交出`
+        : `交给 ${esc(e.counterparty)} <span class="ho-arrow">${st.arrow}</span>`;
+      return `
+        <tr class="ho-event-${e.type}">
+          <td class="cell-minute">${e.seq}</td>
+          <td class="cell-minute">第${e.minute}分</td>
+          <td><strong>${esc(e.propName)}</strong></td>
+          <td><span class="inv-badge ${st.cls}">${st.text}</span></td>
+          <td>${detail}</td>
+          <td><a data-record-id="${esc(e.recordId)}" class="ho-record-link">记录 ${shortId(e.recordId)}</a></td>
+          <td class="inv-note">${esc(e.note)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  if (result.undetermined.length === 0) {
+    els.hoUnknownBody.innerHTML =
+      '<tr><td colspan="6" class="empty">窗口前及窗口内没有发生链冲突的道具</td></tr>';
+  } else {
+    els.hoUnknownBody.innerHTML = result.undetermined.map((u) => {
+      const links = (u.recordIds || [])
+        .map((id) => `<a data-record-id="${esc(id)}">记录 ${shortId(id)}</a>`)
+        .join('、') || '<span class="inv-dash">—</span>';
+      return `
+        <tr class="inv-row-UNKNOWN">
+          <td><strong>${esc(u.propName)}</strong></td>
+          <td>${HO_PHASE_TEXT[u.phase] || u.phase}发生冲突</td>
+          <td class="cell-minute">第${u.conflictMinute}分</td>
+          <td>${esc(u.conflictTypeText)}</td>
+          <td class="handover-links">${links}</td>
+          <td class="inv-note">${esc(u.reason)}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  els.hoPanel.classList.remove('hidden');
+  els.hoPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function submitHandover() {
+  const person = els.hoPersonInput.value.trim();
+  const fromMinute = Number(els.hoFromInput.value);
+  const toMinute = Number(els.hoToInput.value);
+  if (!person) {
+    toast('请输入人员姓名', true);
+    return;
+  }
+  if (!Number.isInteger(fromMinute) || fromMinute < 0 || !Number.isInteger(toMinute) || toMinute < 0) {
+    toast('起止分钟必须是不小于 0 的整数', true);
+    return;
+  }
+  if (fromMinute > toMinute) {
+    toast('起始分钟不能大于截止分钟（起止分钟均包含在收支明细中）', true);
+    return;
+  }
+
+  try {
+    const qs = new URLSearchParams({
+      person,
+      fromMinute: String(fromMinute),
+      toMinute: String(toMinute),
+    });
+    const result = await api(`/api/handovers/person?${qs}`);
+    els.hoDialog.close();
+    renderHandoverResult(result);
+    toast('责任单已生成（只读查询，未改动交接记录）');
   } catch (err) {
     toast(err.message, true);
   }
