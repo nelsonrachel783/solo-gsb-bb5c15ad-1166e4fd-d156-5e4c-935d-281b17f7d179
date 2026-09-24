@@ -7,6 +7,7 @@ const store = require('./src/store');
 const { verifyAll } = require('./src/verify');
 const { checkInventory } = require('./src/inventory');
 const { previewBatch, hashRows } = require('./src/batch');
+const { buildResponsibilitySheet } = require('./src/responsibility');
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -87,6 +88,26 @@ app.post('/api/inventory/check', asyncRoute((req, res) => {
   // 纯读取 + 即时重放，不写入任何数据
   res.json(checkInventory(store.getData(), minute, rows));
 }));
+
+/* ---------------- 人员交接责任单（只读，即时结果，不改写交接记录） ---------------- */
+
+app.get('/api/responsibility', (req, res) => {
+  let person;
+  let startMinute;
+  let endMinute;
+  try {
+    person = nonEmpty(req.query.person, '人员姓名');
+    if (person.length > 30) throw new Error('人员姓名最长 30 个字符');
+    startMinute = parseMinute(req.query.start, '起始分钟');
+    endMinute = parseMinute(req.query.end, '结束分钟');
+    if (startMinute > endMinute) throw new Error('起始分钟不能大于结束分钟');
+  } catch (err) {
+    return badRequest(res, err.message);
+  }
+
+  // 纯读取 + 即时重放，不写入任何数据
+  res.json(buildResponsibilitySheet(store.getData(), person, startMinute, endMinute));
+});
 
 /* ---------------- 道具 CRUD ---------------- */
 

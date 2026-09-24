@@ -57,6 +57,22 @@ const els = {
   btnBatchPreview: $('#btn-batch-preview'),
   btnBatchCommit: $('#btn-batch-commit'),
   batchResult: $('#batch-result'),
+  // 人员交接责任单
+  btnResponsibility: $('#btn-responsibility'),
+  respDialog: $('#resp-dialog'),
+  respForm: $('#resp-form'),
+  respPersonInput: $('#resp-person-input'),
+  respStartInput: $('#resp-start-input'),
+  respEndInput: $('#resp-end-input'),
+  respPanel: $('#resp-panel'),
+  respPerson: $('#resp-person'),
+  respStart: $('#resp-start'),
+  respEnd: $('#resp-end'),
+  respSummary: $('#resp-summary'),
+  respHoldings: $('#resp-holdings'),
+  respTableBody: document.querySelector('#resp-table tbody'),
+  respUnd: $('#resp-undeterminable'),
+  btnRespClose: $('#btn-resp-close'),
 };
 
 const STATUS_TEXT = {
@@ -396,6 +412,14 @@ function bindEvents() {
   });
   els.btnInvClose.addEventListener('click', () => els.invPanel.classList.add('hidden'));
 
+  // 人员交接责任单
+  els.btnResponsibility.addEventListener('click', openRespDialog);
+  els.respForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    submitResponsibility();
+  });
+  els.btnRespClose.addEventListener('click', () => els.respPanel.classList.add('hidden'));
+
   // 批量交接预演
   els.btnBatch.addEventListener('click', openBatchDialog);
   els.btnBatchAddRow.addEventListener('click', () => {
@@ -491,7 +515,7 @@ function bindEvents() {
       return;
     }
     const conflictLink = t.closest?.('[data-record-id]');
-    if (conflictLink && t.closest('.conflict-box')) {
+    if (conflictLink && (t.closest('.conflict-box') || t.closest('#resp-panel'))) {
       locateRecord(conflictLink.dataset.recordId);
     }
   });
@@ -796,6 +820,121 @@ async function submitInventory() {
     els.invDialog.close();
     renderInventoryResult(result);
     toast('盘点完成（结果仅本次有效，未改动交接记录）');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+/* ==================== 人员交接责任单 ==================== */
+
+function openRespDialog() {
+  els.respPersonInput.value = '';
+  els.respStartInput.value = 0;
+  els.respEndInput.value = state.verification.endMinute || 0;
+  els.respDialog.showModal();
+  els.respPersonInput.focus();
+}
+
+function renderRespResult(result) {
+  els.respPerson.textContent = result.person;
+  els.respStart.textContent = result.startMinute;
+  els.respEnd.textContent = result.endMinute;
+
+  const s = result.summary;
+  const chips = [
+    [`接收 ${s.received} 次`, s.received > 0 ? 'chip-ok' : ''],
+    [`交出 ${s.handedOut} 次`, s.handedOut > 0 ? 'chip-neutral' : ''],
+    [`起点交接前持有 ${s.startHoldingCount} 件`, ''],
+    [`终点交接后持有 ${s.endHoldingCount} 件`, ''],
+    [`无法判定 ${s.undeterminableCount} 件`, s.undeterminableCount > 0 ? 'chip-bad' : ''],
+  ];
+  els.respSummary.innerHTML = chips
+    .map(([text, cls]) => `<span class="inv-chip ${cls}">${text}</span>`)
+    .join('');
+
+  const holdingBlock = (title, list) => `
+    <div class="resp-holding">
+      <div class="resp-holding-title">${title}</div>
+      <div class="resp-holding-list">${
+        list.length
+          ? list.map((h) => `<span class="resp-prop-pill">${esc(h.propName)}</span>`).join('')
+          : '<span class="inv-dash">无</span>'
+      }</div>
+    </div>`;
+  els.respHoldings.innerHTML =
+    holdingBlock(`窗口起点 · 第 ${result.startMinute} 分钟交接前持有`, result.startHoldings) +
+    holdingBlock(`窗口终点 · 第 ${result.endMinute} 分钟交接后持有`, result.endHoldings);
+
+  if (result.movements.length === 0) {
+    els.respTableBody.innerHTML =
+      `<tr><td colspan="8" class="empty">窗口内「${esc(result.person)}」没有接收或交出道具的记录</td></tr>`;
+  } else {
+    els.respTableBody.innerHTML = result.movements.map((m, i) => {
+      const dir = m.direction === 'IN'
+        ? '<span class="inv-badge inv-ok">接收</span>'
+        : '<span class="inv-badge inv-neutral">交出</span>';
+      return `
+        <tr>
+          <td class="cell-minute">${i + 1}</td>
+          <td class="cell-minute">第${m.minute}分</td>
+          <td><strong>${esc(m.propName)}</strong></td>
+          <td>${dir}</td>
+          <td>${esc(m.from)}</td>
+          <td>${esc(m.to)}</td>
+          <td>${esc(m.note)}</td>
+          <td><a class="resp-rec-link" data-record-id="${esc(m.recordId)}" title="在右下记录表中定位">${shortId(m.recordId)}</a></td>
+        </tr>`;
+    }).join('');
+  }
+
+  if (result.undeterminable.length === 0) {
+    els.respUnd.innerHTML = '';
+  } else {
+    els.respUnd.innerHTML = `
+      <div class="resp-und-head">⚠ 无法判定（${result.undeterminable.length} 件）：以下道具的交接链在窗口前或窗口内发生冲突，不计入确定持有与收支</div>
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>道具</th><th>冲突分钟</th><th>冲突类型</th><th>说明</th></tr></thead>
+          <tbody>${result.undeterminable.map((u) => `
+            <tr class="inv-row-UNKNOWN">
+              <td><strong>${esc(u.propName)}</strong></td>
+              <td class="cell-minute">第${u.conflictMinute}分</td>
+              <td>${u.conflictType === 'AMBIGUOUS' ? '多条可接续（链不唯一）' : '无法接续（断链）'}</td>
+              <td class="inv-note">${esc(u.reason)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  els.respPanel.classList.remove('hidden');
+  els.respPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function submitResponsibility() {
+  const person = els.respPersonInput.value.trim();
+  const start = Number(els.respStartInput.value);
+  const end = Number(els.respEndInput.value);
+  if (!person) {
+    toast('请填写人员姓名', true);
+    return;
+  }
+  if (!Number.isInteger(start) || start < 0 || !Number.isInteger(end) || end < 0) {
+    toast('起止分钟必须是不小于 0 的整数', true);
+    return;
+  }
+  if (start > end) {
+    toast('起始分钟不能大于结束分钟', true);
+    return;
+  }
+
+  try {
+    const result = await api(
+      `/api/responsibility?person=${encodeURIComponent(person)}&start=${start}&end=${end}`
+    );
+    els.respDialog.close();
+    renderRespResult(result);
+    toast('责任单已生成（结果仅本次有效，未改动交接记录）');
   } catch (err) {
     toast(err.message, true);
   }

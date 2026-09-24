@@ -400,6 +400,34 @@ main .btn:hover { background: var(--muted-bg); color: var(--ink); }
 
 .hidden { display: none !important; }
 
+/* ---------- 人员交接责任单 ---------- */
+.panel-resp { margin-bottom: 16px; }
+.resp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.resp-head h2 span { color: var(--brand); }
+.resp-holdings { display: flex; gap: 18px; flex-wrap: wrap; padding: 10px 18px 2px; }
+.resp-holding { flex: 1 1 280px; }
+.resp-holding-title { font-size: 12.5px; color: var(--ink-soft); font-weight: 600; margin-bottom: 5px; }
+.resp-holding-list { display: flex; gap: 6px; flex-wrap: wrap; }
+.resp-prop-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #eef3fa;
+  color: var(--accent);
+  border: 1px solid #cfdeef;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.resp-section-title {
+  padding: 12px 18px 8px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+.resp-und { padding: 0 18px 14px; }
+.resp-und-head { color: var(--error); font-weight: 600; font-size: 13px; margin: 12px 0 6px; }
+.resp-rec-link { color: var(--accent); cursor: pointer; text-decoration: underline; }
+
 /* ---------- 批量交接预演 ---------- */
 .batch-rows {
   display: flex;

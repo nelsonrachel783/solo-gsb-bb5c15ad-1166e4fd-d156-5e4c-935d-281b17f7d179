@@ -21,6 +21,7 @@
         <button id="btn-add-record" class="btn btn-primary">＋ 录入交接记录</button>
         <button id="btn-batch" class="btn">🧪 批量交接预演</button>
         <button id="btn-inventory" class="btn btn-accent">🔍 现场盘点</button>
+        <button id="btn-responsibility" class="btn">📋 人员交接责任单</button>
         <button id="btn-reverify" class="btn" title="重新读取记录并按时间重放">↻ 重新核验</button>
       </div>
     </div>
@@ -58,6 +59,29 @@
           <tbody></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- 人员交接责任单结果（查询后即时展示，只读、不改写交接记录） -->
+    <section id="resp-panel" class="panel panel-resp hidden">
+      <div class="panel-head resp-head">
+        <h2>📋 人员交接责任单 · <span id="resp-person">-</span> · 第 <span id="resp-start">-</span> – <span id="resp-end">-</span> 分钟（起止均含）</h2>
+        <button type="button" class="btn btn-sm" id="btn-resp-close" title="关闭责任单">✕ 关闭</button>
+      </div>
+      <div class="inv-summary" id="resp-summary"></div>
+      <div class="resp-holdings" id="resp-holdings"></div>
+      <div class="resp-section-title">收支明细（按实际接续顺序）</div>
+      <div class="table-wrap">
+        <table class="table" id="resp-table">
+          <thead>
+            <tr>
+              <th class="col-rowno">#</th><th>分钟</th><th>道具</th><th>收/支</th>
+              <th>交出者</th><th>接收者</th><th>备注</th><th>记录</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="resp-undeterminable" class="resp-und"></div>
     </section>
 
     <div class="grid">
@@ -206,6 +230,38 @@
         <button type="submit" class="btn btn-primary" id="inv-submit">提交盘点</button>
       </div>
       <datalist id="prop-name-list"></datalist>
+    </form>
+  </dialog>
+
+  <!-- 人员交接责任单查询弹窗 -->
+  <dialog id="resp-dialog" class="dialog">
+    <form method="dialog" id="resp-form">
+      <h3>人员交接责任单</h3>
+      <p class="dialog-tip">
+        输入人员姓名与起止分钟（<strong>起止分钟均包含</strong>在收支明细内），沿用同分钟唯一交接链规则重放：
+        按实际接续顺序列出该人在时间窗内逐次接收、交出的道具与对应记录，
+        并汇总窗口起点交接前、终点交接后的持有道具。
+        窗口前或窗口内发生链冲突的道具单列为「无法判定」并标明冲突分钟，不计入确定持有与收支；
+        窗口后的冲突不影响本次结果。查询只读，不会改写任何交接记录。
+      </p>
+      <label class="field">
+        <span>人员姓名 <em>*</em></span>
+        <input type="text" id="resp-person-input" maxlength="30" required list="people-list" placeholder="如 张三" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span>起始分钟（含） <em>*</em></span>
+          <input type="number" id="resp-start-input" min="0" step="1" required placeholder="如 0" />
+        </label>
+        <label class="field">
+          <span>结束分钟（含） <em>*</em></span>
+          <input type="number" id="resp-end-input" min="0" step="1" required placeholder="如 12" />
+        </label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>取消</button>
+        <button type="submit" class="btn btn-primary" id="resp-submit">查询责任单</button>
+      </div>
     </form>
   </dialog>
 
